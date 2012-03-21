@@ -17,17 +17,15 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Debug;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageView;
-import android.widget.TextView;
 import android.widget.Toast;
 import com.clover.sdk.Clover;
 import com.clover.sdk.CloverOrder;
@@ -38,8 +36,10 @@ import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class ProcessActivity extends ListActivity {
@@ -48,11 +48,12 @@ public class ProcessActivity extends ListActivity {
   Clover cloverSDK;
 
   Button refreshButton;
-  List<Data> dataList = new ArrayList<Data>();
-  ArrayAdapter<Data> adapter;
+  List<ProcessData> dataList = new ArrayList<ProcessData>();
+  ArrayAdapter<ProcessData> adapter;
   private static final int DONATE = 1;
 
   private static final DecimalFormat FORMAT = new DecimalFormat("0.00");
+  private static final String SCHEME = "package";
 
   @Override
   public void onCreate(Bundle saved) {
@@ -66,7 +67,17 @@ public class ProcessActivity extends ListActivity {
     setContentView(R.layout.main);
 
     refreshButton = (Button) findViewById(R.id.refreshButton);
-    refreshButton.setVisibility(View.GONE);
+    if (ProcessListAdapter.apiLevel >= 14) {
+      refreshButton.setVisibility(View.GONE);
+    } else {
+      refreshButton.setVisibility(View.VISIBLE);
+      refreshButton.setOnClickListener(new View.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+          loadData();
+        }
+      });
+    }
     Button donateButton = (Button) findViewById(R.id.donateButton);
 //    donateButton.setVisibility(View.GONE);
 //    if (false) {
@@ -176,18 +187,22 @@ public class ProcessActivity extends ListActivity {
   public void loadData() {
     Log.d(TAG, "loaddata ----");
     final ProgressDialog dialog = ProgressDialog.show(this, "", "Loading info...");
-    AsyncTask<Void, Void, List<Data>> task = new AsyncTask<Void, Void, List<Data>>() {
+    AsyncTask<Void, Void, List<ProcessData>> task = new AsyncTask<Void, Void, List<ProcessData>>() {
       @Override
-      protected List<Data> doInBackground(Void... voids) {
+      protected List<ProcessData> doInBackground(Void... voids) {
+
+        Map<String,ProcessData> pkg2Data = new HashMap<String, ProcessData>();
         ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+
         PackageManager pm = ProcessActivity.this.getPackageManager();
         List<ActivityManager.RunningAppProcessInfo> list = activityManager.getRunningAppProcesses();
 
-        List<Data> procs = new ArrayList<Data>(list.size());
+        List<ProcessData> procs = new ArrayList<ProcessData>(list.size());
 
         for (ActivityManager.RunningAppProcessInfo info : list) {
           // Skip the android native ones
           if (isSystemProcessName(info)) continue;
+
           String name;
           ApplicationInfo applicationInfo;
           try {
@@ -197,20 +212,33 @@ public class ProcessActivity extends ListActivity {
             // ignore this one
             continue;
           }
-          Data data = new Data(name, info.processName, applicationInfo);
+          ProcessData data = new ProcessData(name, info.processName, applicationInfo);
           data.pkglist = info.pkgList;
           data.pid = info.pid;
           data.mem = 0;
+          pkg2Data.put(info.processName, data);
           procs.add(data);
         }
+
+        List<ActivityManager.RunningServiceInfo> services = activityManager.getRunningServices(20);
+
+        for (ActivityManager.RunningServiceInfo service: services) {
+//          Log.d(TAG, "service -> " + service.process + " name " + service.clientPackage + " " + service.activeSince + " tostr " + service.toString()
+//           + " x " + service.clientCount);
+          ProcessData data = pkg2Data.get(service.process);
+          if (data != null) {
+            data.noOfServices++;
+          }
+        }
+
         return procs;
       }
 
       @Override
-      public void onPostExecute(List<Data> items) {
+      public void onPostExecute(List<ProcessData> items) {
         adapter.clear();
         adapter.notifyDataSetInvalidated();
-        for (Data item : items) {
+        for (ProcessData item : items) {
           adapter.add(item);
         }
         adapter.notifyDataSetChanged();
@@ -235,6 +263,10 @@ public class ProcessActivity extends ListActivity {
           "com.android.vending",
           "com.google.android.gsf.login",
           "com.android.packageinstaller",
+          "com.android.providers.calendar",
+          "com.android.bluetooth",
+          "com.google.android.voicesearch",
+          "com.android.settings",
           "system"
           )
   );
@@ -250,7 +282,7 @@ public class ProcessActivity extends ListActivity {
   }
 
 
-  public static class Data {
+  public static class ProcessData {
     public String processName;
     public int mem;
     private Drawable icon;
@@ -259,15 +291,14 @@ public class ProcessActivity extends ListActivity {
     public final String pkgName;
     public final ApplicationInfo applicationInfo;
     private MemInfo memInfo;
+    private int noOfServices;
 
-    public Data(String procName, String packageName, ApplicationInfo packageInfo) {
+    public ProcessData(String procName, String packageName, ApplicationInfo packageInfo) {
       Log.d(TAG, "procName " + procName + " packageName " + packageName);
       this.processName = procName;
       this.pkgName = packageName;
       this.applicationInfo = packageInfo;
     }
-
-    public static final DecimalFormat format = new DecimalFormat("0.00");
 
     public static class MemInfo {
       public String memPretty;
@@ -290,25 +321,25 @@ public class ProcessActivity extends ListActivity {
         holder.label2.setText(memInfo.memPretty);
         return;
       }
-      final Data data = this;
-      (new AsyncTask<Void,Void,Data.MemInfo>() {
+      final ProcessData data = this;
+      (new AsyncTask<Void,Void,ProcessData.MemInfo>() {
 
         @Override
         protected void onPreExecute() {
           holder.label2.setText("Loading...");
         }
         @Override
-        protected Data.MemInfo doInBackground(Void... voids) {
+        protected ProcessData.MemInfo doInBackground(Void... voids) {
           return fetchMemoryInfo(activityManager);
         }
 
         @Override
-        protected void onPostExecute(Data.MemInfo memInfo) {
+        protected void onPostExecute(ProcessData.MemInfo memInfo) {
           data.memInfo = memInfo;
           if (holder.data.equals(data)) {
 
 //          int percentWidth = (int) (memInfo.mem/maxMemoryPerApp * width);
-          holder.label2.setText(memInfo.memPretty);
+            holder.label2.setText(memInfo.memPretty);
           }
         }
       }).execute((Void)null);
@@ -318,11 +349,19 @@ public class ProcessActivity extends ListActivity {
       Debug.MemoryInfo[] minfo = activityManager.getProcessMemoryInfo(new int[]{pid});
       if (minfo != null && minfo.length == 1) {
         final int totalPss = minfo[0].getTotalPss();
+        StringBuilder extra = new StringBuilder();
+        if (noOfServices > 0) {
+          if (noOfServices > 1) {
+            extra.append("(").append(noOfServices).append(" services)");
+          } else {
+            extra.append("(1 service)");
+          }
+        }
         if (totalPss < 1000) {
-          return new MemInfo(String.valueOf(totalPss) + "KB", totalPss/1024);
+          return new MemInfo(String.valueOf(totalPss) + "KB " + extra, totalPss/1024);
         } else {
           float value = (totalPss *1.00f)/1024;
-          return new MemInfo(format.format(value) + "MB", totalPss);
+          return new MemInfo(FORMAT.format(value) + "MB " + extra, totalPss);
         }
       } else {
         return new MemInfo("NA", 1);
@@ -330,89 +369,7 @@ public class ProcessActivity extends ListActivity {
     }
   }
 
-  public static class ProcessListAdapter extends ArrayAdapter<Data> {
-
-    private ProcessActivity context;
-    private List<Data> items;
-    private final ActivityManager activityManager;
-    private final int maxMemoryPerApp;
-
-    public ProcessListAdapter(ProcessActivity context, int textViewResourceId, List<Data> items) {
-      super(context, textViewResourceId, items);
-      this.context = context;
-      this.items = items;
-      this.activityManager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-      this.maxMemoryPerApp = activityManager.getMemoryClass();
-    }
-
-    public static class ViewHolder {
-      ImageView icon;
-      TextView label1;
-      TextView label2;
-      public Data data;
-    }
-    
-
-    @Override
-    public View getView(int pos, final View convertView, ViewGroup viewGroup) {
-      View rowView = convertView;
-      ViewHolder holder;
-      if (rowView == null) {
-        LayoutInflater inflater = (LayoutInflater) context
-            .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        rowView = inflater.inflate(R.layout.rowlayout2, viewGroup, false);
-        holder = new ViewHolder();
-
-        holder.icon = (ImageView) rowView.findViewById(R.id.icon);
-        holder.label1 = (TextView) rowView.findViewById(R.id.label);
-        holder.label2 = (TextView) rowView.findViewById(R.id.label2);
-
-        rowView.setTag(holder);
-      } else {
-        holder = (ViewHolder) rowView.getTag();
-      }
-      final Data data = getItem(pos);
-      holder.data = data;
-
-      final ViewHolder theHolder = holder;
-
-      theHolder.icon.setImageDrawable(data.applicationInfo.loadIcon(context.getPackageManager()));
-      holder.label1.setText(data.processName);
-      data.fetchMemoryInfo(activityManager, holder);
-
-      rowView.setOnClickListener(new View.OnClickListener() {
-        @Override
-        public void onClick(View view) {
-          Bundle bundle = new Bundle();
-          bundle.putString("name", data.processName);
-          bundle.putString("packageName", data.pkgName);
-
-          final CharSequence[] items = {"Kill Process", "Uninstall App", "Cancel"};
-
-          AlertDialog.Builder builder = new AlertDialog.Builder(context);
-          builder.setTitle(data.processName);
-          builder.setItems(items, new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface dialog, int item) {
-              if (item == 0) {
-                context.killProcess(data);
-              } else if (item == 1) {
-                Uri packageUri = Uri.parse("package:" + data.pkgName);
-                Intent uninstallIntent =
-                    new Intent(Intent.ACTION_UNINSTALL_PACKAGE, packageUri);
-                context.startActivity(uninstallIntent);
-              } else {
-                //dialog.dismiss();
-              }
-            }
-          });
-          builder.show();
-        }
-      });
-      return rowView;
-    }
-  }
-
-  private void killProcess(Data data) {
+  public void killProcess(ProcessData data) {
     if ("Taskerator".equals(data.processName) && "com.taskerator".equals(data.pkgName)) {
       System.exit(0);
       return;
@@ -438,4 +395,12 @@ public class ProcessActivity extends ListActivity {
     loadData();
   }
 
+  public static void showInstalledAppDetails(Context context, String packageName) {
+    Intent intent = new Intent();
+
+    intent.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+    Uri uri = Uri.fromParts(SCHEME, packageName, null);
+    intent.setData(uri);
+    context.startActivity(intent);
+  }
 }
