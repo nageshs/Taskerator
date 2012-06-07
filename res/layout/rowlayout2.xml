@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="fill_parent"
-    android:layout_height="?android:attr/listPreferredItemHeight"
-    android:padding="6dip">
+                style="@style/rowlayout">
     <!--<RelativeLayout android:id="@+id/memoryBar"-->
                     <!--android:background="@color/green"-->
                     <!--android:layout_height="fill_parent"-->
@@ -23,7 +21,7 @@
     <TextView
         android:id="@+id/label2"
 
-        android:layout_width="fill_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
 
         android:layout_toRightOf="@id/icon"
@@ -36,10 +34,27 @@
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
         android:layout_toRightOf="@id/icon"
-        android:layout_alignParentRight="true"
         android:layout_alignParentTop="true"
         android:layout_above="@id/label2"
         android:layout_alignWithParentIfMissing="true"
         android:gravity="center_vertical"/>
 
+  <!--android:layout_alignParentRight="true"-->
+
+  <LinearLayout
+      android:id="@+id/linear"
+      android:layout_weight="1"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:gravity="right" android:layout_alignParentRight="true" >
+
+  <CheckBox android:id="@+id/checkBox"
+            android:gravity="right"
+            android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:layout_alignParentRight="true"
+            android:layout_weight="1"
+            android:layout_toRightOf="@+id/label"
+            />
+  </LinearLayout>
 </RelativeLayout>

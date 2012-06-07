@@ -1,12 +1,9 @@
 package com.taskerator;
 
 import android.app.ActivityManager;
-import android.app.AlertDialog;
-import android.app.Dialog;
 import android.app.ListActivity;
 import android.app.ProgressDialog;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -19,21 +16,19 @@ import android.os.Bundle;
 import android.os.Debug;
 import android.provider.Settings;
 import android.util.Log;
-import android.view.LayoutInflater;
+import android.util.SparseBooleanArray;
+import android.view.ActionMode;
 import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.AbsListView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.EditText;
+import android.widget.ListView;
 import android.widget.Toast;
-import com.clover.sdk.Clover;
-import com.clover.sdk.CloverOrder;
-import com.clover.sdk.CloverOrderListener;
-import com.clover.sdk.CloverOrderRequest;
 
 import java.text.DecimalFormat;
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -45,21 +40,20 @@ import java.util.Set;
 public class ProcessActivity extends ListActivity {
   public static final String TAG = "ProcessActivity";
 
-  Clover cloverSDK;
 
   Button refreshButton;
   List<ProcessData> dataList = new ArrayList<ProcessData>();
   ArrayAdapter<ProcessData> adapter;
-  private static final int DONATE = 1;
+  ListView listView;
 
   private static final DecimalFormat FORMAT = new DecimalFormat("0.00");
   private static final String SCHEME = "package";
 
+  private ActionMode actionMode;
+
   @Override
   public void onCreate(Bundle saved) {
     super.onCreate(saved);
-
-    cloverSDK = Clover.init(this, "560140f3-37d6-49dc-8a47-1881ec69b5fe");
 
     adapter = new ProcessListAdapter(this, android.R.layout.simple_dropdown_item_1line, dataList);
     setListAdapter(adapter);
@@ -67,7 +61,7 @@ public class ProcessActivity extends ListActivity {
     setContentView(R.layout.main);
 
     refreshButton = (Button) findViewById(R.id.refreshButton);
-    if (ProcessListAdapter.apiLevel >= 14) {
+    if (Constants.API_LEVEL >= 14) {
       refreshButton.setVisibility(View.GONE);
     } else {
       refreshButton.setVisibility(View.VISIBLE);
@@ -78,17 +72,121 @@ public class ProcessActivity extends ListActivity {
         }
       });
     }
-    Button donateButton = (Button) findViewById(R.id.donateButton);
-//    donateButton.setVisibility(View.GONE);
-//    if (false) {
-      
-      donateButton.setOnClickListener(new View.OnClickListener() {
-        @Override
-        public void onClick(View view) {
-          showDialog(DONATE);
+
+
+    listView = getListView();
+    if (Constants.API_LEVEL >= 14) {
+      contextualActionBarSupport();
+    }
+  }
+
+  private void contextualActionBarSupport() {
+    listView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE_MODAL);
+    listView.setItemsCanFocus(false);
+
+    listView.setMultiChoiceModeListener(new AbsListView.MultiChoiceModeListener() {
+
+      @Override
+      public void onItemCheckedStateChanged(ActionMode mode, int position,
+                                            long id, boolean checked) {
+        // Here you can do something when items are selected/de-selected,
+        // such as update the title in the CAB
+        int count = listView.getCheckedItemCount();
+        if (count > 1) {
+          mode.invalidate();
+        } else if (count == 1) {
+          mode.invalidate();
         }
-      });
-//    }
+        mode.setTitle(count + " Selected ");
+      }
+
+      @Override
+      public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+        // Respond to clicks on the actions in the CAB
+        switch (item.getItemId()) {
+          case R.id.cab_action_kill:
+          {
+            SparseBooleanArray items = listView.getCheckedItemPositions();
+            StringBuilder sb = new StringBuilder();
+            List<ProcessData> toKill = new ArrayList<ProcessData>(items.size());
+            for (int i = 0; i < items.size(); i++) {
+              final int key = items.keyAt(i);
+              if (items.get(key)) {
+                ProcessData data = (ProcessData) listView.getItemAtPosition(key);
+                toKill.add(data);
+              }
+            }
+            for (ProcessData data : toKill) {
+              sb.append(data.pkgName).append(" killed\n");
+            }
+
+            killProcesses(toKill);
+            Toast.makeText(ProcessActivity.this, sb.toString(), Toast.LENGTH_LONG).show();
+            mode.finish(); // Action picked, so close the CAB
+            return true;
+          }
+          case R.id.cab_action_appinfo:
+          {
+            int pos = -1;
+            pos = getItemPos();
+            if (pos == -1) return true;
+            ProcessData data = (ProcessData) listView.getItemAtPosition(pos);
+            ProcessActivity.showInstalledAppDetails(ProcessActivity.this, data.pkgName);
+            return true;
+          }
+          case R.id.cab_action_uninstall:
+          {
+            int pos = getItemPos();
+            if (pos == -1) return true;
+            ProcessData data = (ProcessData) listView.getItemAtPosition(pos);
+            Uri packageUri = Uri.parse("package:" + data.pkgName);
+            Intent uninstallIntent = null;
+            if (Constants.API_LEVEL >= 14) {
+              uninstallIntent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE, packageUri);
+            } else {
+              uninstallIntent = new Intent(Intent.ACTION_DELETE, packageUri);
+            }
+            startActivity(uninstallIntent);
+            return true;
+          }
+          default:
+            return false;
+        }
+      }
+
+      @Override
+      public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+        // Inflate the menu for the CAB
+        MenuInflater inflater = mode.getMenuInflater();
+        inflater.inflate(R.menu.context_menu, menu);
+        return true;
+      }
+
+      @Override
+      public void onDestroyActionMode(ActionMode mode) {
+        // Here you can make any necessary updates to the activity when
+        // the CAB is removed. By default, selected items are deselected/unchecked.
+      }
+
+      @Override
+      public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+        // Here you can perform updates to the CAB due to
+        // an invalidate() request
+        final boolean show = listView.getCheckedItemCount() == 1;
+        menu.findItem(R.id.cab_action_appinfo).setVisible(show);
+        menu.findItem(R.id.cab_action_uninstall).setVisible(show);
+        return true;
+      }
+    });
+  }
+
+  private int getItemPos() {
+    SparseBooleanArray arr = listView.getCheckedItemPositions();
+    for (int i = 0; i < arr.size(); i++) {
+      int key = arr.keyAt(i);
+      if (arr.get(key)) return key;
+    }
+    return -1;
   }
 
   @Override
@@ -97,71 +195,6 @@ public class ProcessActivity extends ListActivity {
     loadData();
   }
 
-  public Dialog onCreateDialog(int which, Bundle bundle) {
-    switch (which) {
-      case DONATE:
-      {
-        LayoutInflater factory = LayoutInflater.from(this);
-        final View textEntryView = factory.inflate(R.layout.alert_dialog_text_entry, null);
-        return new AlertDialog.Builder(this)
-            //.setIconAttribute(android.R.attr.alertDialog)
-            .setTitle("Donate")
-            .setView(textEntryView)
-            .setPositiveButton("OK", new DialogInterface.OnClickListener() {
-              public void onClick(DialogInterface dialog, int whichButton) {
-                EditText value = (EditText) textEntryView.findViewById(R.id.value);
-                Number data = null;
-                try {
-                  data = FORMAT.parse(value.getText().toString());
-                } catch (ParseException e) {
-                  Toast.makeText(ProcessActivity.this, "Invalid amount", Toast.LENGTH_LONG).show();
-                  showDialog(DONATE);
-                  return;
-                }
-                final CloverOrderRequest order = cloverSDK.createOrderRequestBuilder()
-                        .setAmount(FORMAT.format(data))
-                        .setTitle("Donation to Taskerator")
-                        .setPermissions(new String[]{"full_name", "email_address"})
-                        .setClientOrderId("donation") // Specify an ID that identifies this item in your application. (such as an item id)
-                        .build();
-                cloverSDK.authorizeOrder(ProcessActivity.this, order, new CloverOrderListener() {
-                  @Override
-                  public void onOrderAuthorized(CloverOrder order) {
-                    AlertDialog.Builder builder = new AlertDialog.Builder(ProcessActivity.this);
-                    builder.setTitle("Thank you!");
-                    builder.setMessage("Thank you," + order.permissions.fullName + "! We really appreciate your donation.");
-                    builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
-                      @Override
-                      public void onClick(DialogInterface dialogInterface, int i) {
-                        // no op
-                      }
-                    });
-                    builder.show();
-                  }
-
-                  @Override
-                  public void onCancel() {
-                    //Toast.makeText(ProcessActivity.this, "Thanks for taking the interest to try out the app.", Toast.LENGTH_LONG).show();
-                  }
-
-                  @Override
-                  public void onFailure(Throwable th) {
-                    Toast.makeText(ProcessActivity.this, "Sorry, there was an error processing the request.", Toast.LENGTH_LONG).show();
-                  }
-                });
-                
-              }
-            })
-            .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-              public void onClick(DialogInterface dialog, int whichButton) {
-
-              }
-            })
-            .create();
-      }
-    }
-    return null;
-  }
   @Override
   public boolean onCreateOptionsMenu(Menu menu) {
     getMenuInflater().inflate(R.menu.menu, menu);
@@ -177,11 +210,6 @@ public class ProcessActivity extends ListActivity {
           default:
               return super.onOptionsItemSelected(item);
       }
-  }
-
-  public void onActivityResult(int requestCode, int resultCode, Intent data) {
-    super.onActivityResult(requestCode, resultCode, data);
-    cloverSDK.onResult(requestCode, resultCode, data);
   }
 
   public void loadData() {
@@ -210,6 +238,9 @@ public class ProcessActivity extends ListActivity {
             name = new StringBuilder().append(pm.getApplicationLabel(applicationInfo)).toString();
           } catch (PackageManager.NameNotFoundException e) {
             // ignore this one
+            continue;
+          } catch (Throwable ex) {
+            ex.printStackTrace();
             continue;
           }
           ProcessData data = new ProcessData(name, info.processName, applicationInfo);
@@ -280,6 +311,119 @@ public class ProcessActivity extends ListActivity {
         processName.startsWith("com.google.process.gapps") ||
         processName.startsWith("android.process.core");
   }
+
+  public ActionMode getActionMode() {
+    return actionMode;
+  }
+
+//  private ActionMode.Callback mActionModeCallback = new ActionMode.Callback() {
+//
+//      // Called when the action mode is created; startActionMode() was called
+//      @Override
+//      public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+//          // Inflate a menu resource providing context menu items
+//          MenuInflater inflater = mode.getMenuInflater();
+//          inflater.inflate(R.menu.context_menu, menu);
+//          return true;
+//      }
+//
+//      // Called each time the action mode is shown. Always called after onCreateActionMode, but
+//      // may be called multiple times if the mode is invalidated.
+//    int count = 0;
+//      @Override
+//      public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+//        count++;
+//        mode.setTitle("called " + count);
+//          return false; // Return false if nothing is done
+//      }
+//
+//      // Called when the user selects a contextual menu item
+//      @Override
+//      public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+//          switch (item.getItemId()) {
+//              case R.id.cab_action_delete:
+//                  Toast.makeText(ProcessActivity.this, "delete item clicked ", Toast.LENGTH_SHORT).show();
+//                  mode.finish(); // Action picked, so close the CAB
+//                  return true;
+//              default:
+//                  return false;
+//          }
+//      }
+//
+//      // Called when the user exits the action mode
+//      @Override
+//      public void onDestroyActionMode(ActionMode mode) {
+//          actionMode = null;
+//          count= 0;
+//      }
+//  };
+//  public void beginActionMode() {
+//    actionMode = startActionMode(mActionModeCallback);
+//  }
+
+//  @Override
+//  public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+//    // Notice how the ListView api is lame
+//    // You can use mListView.getCheckedItemIds() if the adapter
+//    // has stable ids, e.g you're using a CursorAdaptor
+//    SparseBooleanArray checked = listView.getCheckedItemPositions();
+//    boolean hasCheckedElement = false;
+//    for (int i = 0; i < checked.size() && !hasCheckedElement; i++) {
+//      hasCheckedElement = checked.valueAt(i);
+//    }
+//
+//    if (hasCheckedElement) {
+//      if (actionMode == null) {
+//        actionMode = startActionMode(new ModeCallback());
+//      }
+//    } else {
+//      if (actionMode != null) {
+//        actionMode.finish();
+//      }
+//    }
+//  }
+
+
+  private final class ModeCallback implements ActionMode.Callback {
+
+      @Override
+      public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+          // Create the menu from the xml file
+          MenuInflater inflater = getMenuInflater();
+          inflater.inflate(R.menu.context_menu, menu);
+          return true;
+      }
+
+      @Override
+      public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+          // Here, you can checked selected items to adapt available actions
+          return false;
+      }
+
+      @Override
+      public void onDestroyActionMode(ActionMode mode) {
+          // Destroying action mode, let's unselect all items
+          for (int i = 0; i < listView.getAdapter().getCount(); i++)
+              listView.setItemChecked(i, false);
+
+          if (mode == actionMode) {
+              actionMode = null;
+          }
+      }
+
+      @Override
+      public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+          long[] selected = listView.getCheckedItemIds();
+          if (selected.length > 0) {
+              for (long id: selected) {
+                  // Do something with the selected item
+              }
+          }
+          mode.finish();
+          return true;
+      }
+  };
+
 
 
   public static class ProcessData {
@@ -369,7 +513,7 @@ public class ProcessActivity extends ListActivity {
     }
   }
 
-  public void killProcess(ProcessData data) {
+  public void killProcessOnly(ProcessData data) {
     if ("Taskerator".equals(data.processName) && "com.taskerator".equals(data.pkgName)) {
       System.exit(0);
       return;
@@ -391,8 +535,23 @@ public class ProcessActivity extends ListActivity {
       }
       data.icon = null;
     }
+  }
+
+  public void killProcess(ProcessData data) {
+    killProcessOnly(data);
     // finally refresh the data
     loadData();
+  }
+
+  public void killProcesses(List<ProcessData> list) {
+    try {
+      for (ProcessData data : list) {
+        killProcessOnly(data);
+      }
+      loadData();
+    } catch (Exception ex) {
+      ex.printStackTrace();
+    }
   }
 
   public static void showInstalledAppDetails(Context context, String packageName) {

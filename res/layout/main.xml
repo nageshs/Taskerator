@@ -15,16 +15,18 @@
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
       android:layout_weight="1"
-      android:id="@android:id/list"/>
+      android:id="@android:id/list"
+      android:choiceMode="multipleChoice"
+      />
 
-  <Button android:id="@+id/donateButton"
-          android:layout_width="fill_parent"
-          android:gravity="center_horizontal"
-          android:layout_height="50dip"
-          android:singleLine="true"
-          android:layout_alignParentBottom="true"
-          android:text="Keep Taskerator free: Donate"
-          android:textAppearance="?android:attr/textAppearanceMedium"
-          android:layout_marginTop="2dip"
-          android:layout_marginBottom="2dip"/>
+  <!--<Button android:id="@+id/donateButton"-->
+          <!--android:layout_width="fill_parent"-->
+          <!--android:gravity="center_horizontal"-->
+          <!--android:layout_height="50dip"-->
+          <!--android:singleLine="true"-->
+          <!--android:layout_alignParentBottom="true"-->
+          <!--android:text="Keep Taskerator free: Donate"-->
+          <!--android:textAppearance="?android:attr/textAppearanceMedium"-->
+          <!--android:layout_marginTop="2dip"-->
+          <!--android:layout_marginBottom="2dip"/>-->
 </LinearLayout>

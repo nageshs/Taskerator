@@ -1,0 +1,11 @@
+<resources>
+  <style name="CustomTheme" parent="@android:style/Theme">
+  </style>
+
+  <style name="rowlayout">
+    <item name="android:layout_width">fill_parent</item>
+    <item name="android:layout_height">?android:attr/listPreferredItemHeight</item>
+    <item name="android:padding">6dip</item>
+  </style>
+
+</resources>

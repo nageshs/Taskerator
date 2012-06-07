@@ -1,0 +1,5 @@
+<resources>
+  <drawable name="listitem_pressed">@color/blue</drawable>
+  <drawable name="listitem_selected">@color/blue</drawable>
+  <drawable name="listitem_normal">@android:color/transparent</drawable>
+</resources>

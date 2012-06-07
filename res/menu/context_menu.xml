@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+  <item
+      android:id="@+id/cab_action_kill"
+      android:title="@string/action_kill"
+      android:icon="@drawable/ic_menu_kill"
+      android:showAsAction="always|withText"/>
+  <item
+      android:id="@+id/cab_action_uninstall"
+      android:title="@string/action_uninstall"
+      android:icon="@drawable/ic_menu_uninstall"
+      android:showAsAction="ifRoom"/>
+  <item
+      android:id="@+id/cab_action_appinfo"
+      android:title="@string/action_appinfo"
+      android:icon="@android:drawable/ic_menu_info_details"
+      android:showAsAction="ifRoom"/>
+
+</menu>
