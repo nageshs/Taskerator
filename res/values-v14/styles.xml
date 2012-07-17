@@ -1,6 +1,6 @@
 <resources>
-  <style name="CustomTheme" parent="@android:style/Theme.Holo.Light">
-    <item name="android:activatedBackgroundIndicator">@drawable/my_background</item>
+  <style name="CustomTheme" parent="@android:style/Theme.Holo">
+    <!--<item name="android:activatedBackgroundIndicator">@drawable/my_background</item>-->
   </style>
 
   <style name="rowlayout">
