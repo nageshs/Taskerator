@@ -16,5 +16,9 @@
       android:title="@string/action_appinfo"
       android:icon="@drawable/ic_action_info"
       android:showAsAction="ifRoom"/>
-
+  <item
+      android:id="@+id/cab_action_launch"
+      android:title="@string/action_launch"
+      android:icon="@drawable/ic_action_launch"
+      android:showAsAction="ifRoom"/>
 </menu>

@@ -149,6 +149,20 @@ public class ProcessActivity extends ListActivity {
             startActivity(uninstallIntent);
             return true;
           }
+          case R.id.cab_action_launch:
+          {
+            int pos = getItemPos();
+            if (pos == -1) return true;
+            ProcessData data = (ProcessData) listView.getItemAtPosition(pos);
+            Intent intent = getPackageManager().getLaunchIntentForPackage(data.pkgName);
+            mode.finish();
+            if (intent == null) {
+              Toast.makeText(ProcessActivity.this, getString(R.string.service_only, data.pkgName), Toast.LENGTH_LONG).show();
+              return true;
+            }
+            startActivity(intent);
+            return true;
+          }
           default:
             return false;
         }
@@ -175,6 +189,7 @@ public class ProcessActivity extends ListActivity {
         final boolean show = listView.getCheckedItemCount() == 1;
         menu.findItem(R.id.cab_action_appinfo).setVisible(show);
         menu.findItem(R.id.cab_action_uninstall).setVisible(show);
+        menu.findItem(R.id.cab_action_launch).setVisible(show);
         return true;
       }
     });

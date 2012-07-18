@@ -6,4 +6,6 @@
   <string name="action_kill">kill</string>
   <string name="action_appinfo">Info</string>
   <string name="action_uninstall">Uninstall</string>
+  <string name="action_launch">Launch</string>
+  <string name="service_only">Cannot launch package %1$s</string>
 </resources>
